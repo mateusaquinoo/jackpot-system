@@ -1,0 +1,65 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Sede {
+  id       Int       @id @default(autoincrement())
+  nome     String
+  retiradasPadrao Float  // valor fixo da retirada (ex: 500 ou 750)
+  entradas Entrada[]
+  saidas   Saida[]
+  baixasEvento   BaixaEvento[]
+}
+
+model Entrada {
+  id           Int       @id @default(autoincrement())
+  data         DateTime
+  modalidade   String     // Texas ou Omaha
+  valorArrecadado Float
+  retiradaEventos Float
+  gerente       String
+  valorJackpot  Float
+  sedeId        Int
+  sede          Sede      @relation(fields: [sedeId], references: [id])
+}
+
+model Saida {
+  id           Int      @id @default(autoincrement())
+  data         DateTime
+  hora         String?
+  modalidade   String
+  mesa         String?
+  jogador      String
+  mao          String?
+  porcentagemRoleta Float?
+  premio       Float
+  feito        Boolean  @default(false)
+  gerente      String?   // 👈 NOVO CAMPO
+  sedeId       Int
+  sede         Sede     @relation(fields: [sedeId], references: [id])
+}
+
+model PremiacaoTabela {
+  id         Int     @id @default(autoincrement())
+  modalidade String  // "Texas" ou "Omaha"
+  blind      String  // "1-2", "5-5", etc
+  mao        String  // "Quadra", "Royal x Straight", etc
+  tipo       String  // "fixo" ou "percentual"
+  valor      Float   // R$ se fixo ou 0.025 = 2.5% se percentual
+}
+
+model BaixaEvento {
+  id        Int      @id @default(autoincrement())
+  data      DateTime @default(now())
+  sedeId    Int
+  valor     Float
+  observacao String?
+  sede      Sede     @relation(fields: [sedeId], references: [id])
+}
