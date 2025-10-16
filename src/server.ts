@@ -4,6 +4,7 @@ import express, {
   Request,
   Response,
   NextFunction,
+  RequestHandler,
   ErrorRequestHandler,
 } from "express";
 import cors, { CorsOptions } from "cors";
@@ -21,45 +22,55 @@ const PORT = process.env.PORT || 3001;
 
 /**
  * 🔐 CORS CONFIGURAÇÃO COMPLETA
- * Libera:
  * - localhost (dev)
  * - domínio de produção da Vercel
  * - qualquer preview *.vercel.app
- * - responde aos preflights (OPTIONS)
  */
 const ALLOWED_LIST = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
-// sempre garantir os básicos
+// garante básicos
 if (!ALLOWED_LIST.includes("http://localhost:5173")) {
   ALLOWED_LIST.push("http://localhost:5173");
 }
 if (!ALLOWED_LIST.includes("https://jackpot-frontend-three.vercel.app")) {
-  ALLOWED_LIST.push("https://jackpot-frontend-three.vercel.app"); // sem barra no final
+  ALLOWED_LIST.push("https://jackpot-frontend-three.vercel.app"); // sem barra final
 }
 
 const corsOptions: CorsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // requests sem Origin (curl/health)
+    // chamadas internas (sem Origin) ok
+    if (!origin) return callback(null, true);
 
     // libera qualquer preview da Vercel
     if (/\.vercel\.app$/i.test(origin)) return callback(null, true);
 
+    // libera explicitamente os da lista
     if (ALLOWED_LIST.includes(origin)) return callback(null, true);
 
-    return callback(new Error(`Not allowed by CORS: ${origin}`));
+    callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  maxAge: 86400, // cache do preflight
+  maxAge: 86400,
 };
 
-// CORS + preflight
+// aplica CORS global
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+
+// preflight OPTIONS sem retornar Response (tipado)
+const preflight: RequestHandler = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.method === "OPTIONS") {
+    // CORS já setou os headers; apenas finalize a requisição.
+    res.status(204).end();
+    return;
+  }
+  next();
+};
+app.use(preflight);
 
 app.use(express.json());
 
@@ -74,7 +85,7 @@ app.use("/jackpot", jackpotRoutes);
 app.use("/saidas", saidasRoutes);
 app.use("/eventos", eventosRoutes);
 
-// 🔧 Middleware de erro (tipado corretamente)
+// Middleware de erro (tipado) — não retorna Response
 const errorHandler: ErrorRequestHandler = (
   err: any,
   _req: Request,
@@ -86,13 +97,12 @@ const errorHandler: ErrorRequestHandler = (
     res.status(403).json({ error: err.message });
     return;
   }
-
   console.error("Erro inesperado:", err);
   res.status(500).json({ error: "Erro interno no servidor" });
 };
-
 app.use(errorHandler);
 
+// start
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
